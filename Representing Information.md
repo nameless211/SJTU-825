@@ -1,7 +1,5 @@
 # Representing Information
 
-Note：本章内容只包含大纲
-
 ## Context
 
 字母编码：
@@ -12,7 +10,7 @@ Note：本章内容只包含大纲
 
 1. 无符号数的二进制表示
 2. 有符号数通过补码（two‘s complement）表示
-3. 浮点数和小数的表示
+3. 浮点数的表示
 
 算术运算：
 
