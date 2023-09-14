@@ -1,6 +1,6 @@
 # Programs&Execution
 
-## Context
+## Outline
 
 汇编程序：
 
@@ -67,7 +67,7 @@ x86-64一共有16个通用寄存器
 
 #### 数据传送指令
 
-##### mov
+##### mov***
 
 | 指令                 | 效果            | 描述           |
 | -------------------- | --------------- | -------------- |
@@ -79,8 +79,13 @@ x86-64一共有16个通用寄存器
 | movabsq     I，R     | I   $\rarr$   R | 传送绝对的四字 |
 
 1. Source可以是一个立即数，寄存器或者内存地址，Destination可以是一个寄存器或者内存地址
+
 2. x86-64限制S、D不能同时为内存地址，这意味着内存地址之间的传值需要两个mov操作来完成（这和硬件实现有关）
+
 3. movl较为特殊，虽然它是32bit的指令，但是它会将目的寄存器的高32位字节设置为0
+
+   **值得注意的是，所有为寄存器生成32位数据的指令都会将其高32位清零，例如movzbl等**
+
 4. 当Source为64位的立即数时，只能使用movabsq指令（同时它也只能用于将64位立即数存储到寄存器）。movq虽然支持对64位的寄存器和内存进行操作，但只支持32位的立即数，并将其进行符号扩展后放入64位的目的位置
 
 **针对需要扩展（也就是从较小的位置到较大的位置）的情况，x86-64提供了符号扩展和零扩展的指令**
@@ -99,7 +104,7 @@ x86-64一共有16个通用寄存器
 
    ![image-20230912183245301](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230912183245301.png)
 
-##### 栈操作
+##### 栈操作***
 
 由于x86-64是64位的，因此其栈操作都是64位的操作，带q（quad）后缀
 
@@ -171,7 +176,7 @@ leaq 7(%rdx,%rdx,4)               #5x+7
 
 目的和源操作数相同，做一些自增自减取反取负的操作
 
-##### 二元操作
+##### 二元操作***
 
 第一个是源操作数，第二个是目的操作数，运算的结果被存放于目的操作数中。运算式子为
 $$
@@ -216,6 +221,197 @@ $$
    - 无符号数版本使用xor %rdx，%rdx将rdx设置为0，补码版本使用cgto，将%rax中的被除数进行符号扩展
 
 #### 控制指令
+
+**控制指令的基本逻辑是：根据一些测试的结果来改变程序运行的控制流。**
+
+这就需要两个部分：对数据的测试以及结果的储存、根据储存的结果改变控制流。
+
+##### 条件码 EFLAGS
+
+条件码寄存器是一组单bit的寄存器
+
+| 条件码      | 作用                       |
+| ----------- | -------------------------- |
+| CF 进位标志 | 最高位进位                 |
+| ZF 零标志   | 结果为0                    |
+| SF 符号标志 | 结果为负数                 |
+| OF 溢出标志 | 补码溢出（正溢出或负溢出） |
+
+- 所有的条件码针对的都是最近的操作结果
+
+- CF称进位其实有点不准确，其描述是：
+
+  ![image-20230914152753646](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914152753646.png)
+
+  这不仅可以指无符号数溢出，也可以是左移操作（被设置为最后一个被移出的位）
+
+- 所有的算术操作都有可能会隐式的设置这些flag
+
+  ![image-20230914153210645](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914153210645.png)
+
+##### 逻辑指令
+
+不改变其他寄存器，只设置条件码
+
+| 指令            | 行为        | 描述 |
+| --------------- | ----------- | ---- |
+| CMP S~1~，S~2~  | S~2~ - S~1~ | 比较 |
+| TEST S~1~，S~2~ | S~2~ & S~1~ | 测试 |
+
+- CMP和TEST分别有字节到四字四个版本
+- 根据CMP不同的FLAG情况可以用来判断大小情况
+- TEST可以用于检测是否相等或利用掩码来检测操作数的某些特定位数
+
+##### 访问条件码
+
+条件寄存器和其他整数寄存器不同，不仅不能直接将其他值放入其中，也不能直接取其中的值。用法一般有三种：
+
+1. 根据条件码的组合（从而推断某个操作的结果）来设置某个字节的值
+2. 根据条件码的组合跳转到程序的另一个部分
+3. 根据条件码的组合传送数据
+
+这就引出了三大类指令：SET，JMP，CMOV
+
+###### SET
+
+当执行了CMP之后，根据条件码可以判断两个数的大小关系，从而将目的操作数设置为0|1。
+
+<img src="https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914160926329.png" alt="image-20230914160926329" />
+
+- 典型的用法如下（判断a<b）：
+
+  ```assembly
+  #a in %rdx，b in %rbx
+  
+  cmpq 	%rbx, %rdx		#比较a、b的大小
+  setl 	%al				#根据比较的值设定%al单字节寄存器的值
+  movzbl 	%al, %eax		#将%eax（实际上也是%rax）的其他全部字节清零
+  ```
+
+  注意比较的顺序
+
+- set的目的操作数是单字节的，意味着它只能是单字节内存位置或者低位单字节寄存器。
+
+  所以set的后缀都是在表明其比较的关系
+
+- sets表示判断cmp的结果是否为负可能有些奇怪（在这里，结果为负还要考虑溢出的情况），但是考虑到cmp实际上就是sub操作也是合理的
+
+- setl、setg是用于有符号数，seta、setb用于无符号数
+
+- 对于有符号的比较比较好理解。对于无符号的比较，以a<b为例
+
+  由于cmp相当于在执行a-b，因此若a-b<0，会设置进位标志
+
+###### JMP***
+
+JMP指令的目标可以是一个Label或者是一个以*加上内存引用格式声明的地址。根据JMP条件的不同，有一系列JMP指令
+
+| 指令             | 条件                  |
+| ---------------- | --------------------- |
+| jmp              | 无条件跳转            |
+| je、jne          | 相等情况              |
+| js、jns          | 结果为负数/非负数情况 |
+| jg、jge、jl、jle | 用于有符号数的判断    |
+| ja、jae、jb、jbe | 用于无符号数的判断    |
+
+- jmp的目标是用PC-relative的方式进行指定的
+- jmp的目标并不是Label本身，而是label的下一行，从PC的角度考虑也是挺自然的
+
+###### CMOV
+
+![image-20230914190129061](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914190129061.png)
+
+![image-20230914190624801](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914190624801.png)
+
+### 使用条件指令来实现控制流
+
+基本的条件分支有下列几种：
+
+1. ```c++
+   if(expr)
+       then-statement
+   else(expr)
+       else-statement
+   ```
+
+2. ```c++
+   do
+   	body-statement
+   while(test-expr)
+   ```
+
+3. ```c++
+   while(test-expr)
+   	body-statement
+   ```
+
+4. ```c++
+   for(init-expr; test-expr; update-expr)
+       body-statement
+   ```
+
+5. ```c++
+   switch(oper)
+   	case val_0:
+   		val_0-statement;
+       case val_1:
+   		val_1-statement;
+   	.
+       .
+       case val_n:
+   		val_n-statement;
+   ```
+
+我们利用if-goto来模拟cmp-jmp的逻辑，通过模仿汇编的逻辑来理解这些控制逻辑
+
+#### IF语句
+
+![image-20230914190151885](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914190151885.png)
+
+但是由于处理器的pipeline机制，需要在test-expr得出结果之前就继续运行下面的指令，因此这种跳转的方式可能会导致很高的预测失败开销。
+
+为了避免这一点，可以采用条件传送的思路，也就是先将两个statement的结果都算出来，根据test-expr的结果来决定是哪一个结果要被传到%rax里面作为返回值。(由于条件传送需要读取条件码，因此不存在预测的问题)
+
+<img src="https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914190531740.png" alt="image-20230914190531740" style="zoom:50%;" />
+
+<img src="https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914190551651.png" alt="image-20230914190551651" style="zoom:50%;" />
+
+条件传送所存在的问题是：就算条件不满足，两个分支还是都被计算过了。如果必须在条件满足的情况下才能执行分支语句，那么就有可能导致错误。
+
+#### Do-while循环
+
+![image-20230914192136087](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914192136087.png)
+
+![image-20230914192327192](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914192327192.png)
+
+#### while循环
+
+![image-20230914192353207](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914192353207.png)
+
+通过一个无条件跳转使得第一次body-statement在判断了条件之后再执行
+
+**guarded-do**
+
+在一个do-while循环之前加上了一个判断条件，在第一次条件总是通过的时候可以剩下一次JMP操作
+
+![image-20230914193010552](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914193010552.png)
+
+![image-20230914193027973](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914193027973.png)
+
+#### For循环
+
+可以转换为用while循环实现的形式
+
+![image-20230914193236706](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914193236706.png)
+
+- 但是注意，如果在body中有continue的话，这样转换会导致update被跳过。需要使continue跳过到update前面
+- while循环的翻译仍然有两种
+
+#### Switch语句
+
+switch语句
+
+
 
 ## 程序运行
 

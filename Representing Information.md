@@ -1,6 +1,6 @@
 # Representing Information
 
-## Context
+## Outline
 
 字母编码：
 
