@@ -409,9 +409,32 @@ JMP指令的目标可以是一个Label或者是一个以*加上内存引用格�
 
 #### Switch语句
 
-switch语句
+switch语句的主要特点在于其具有多重分支，对应实现为跳转表
 
+**跳转表：用对应的值来索引，表中的内容是对应的标号**
 
+C版本：
+
+![image-20230914195144236](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914195144236.png)
+
+跳转表
+
+![image-20230914195204590](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914195204590.png)
+
+![image-20230914195212550](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914195212550.png)
+
+汇编版本：
+
+![image-20230914195239118](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914195239118.png)
+
+- 跳转表，注意是存储在.rodata里面的
+- 对于一些不连续的，如101和105，在跳转表中仍然存在，只是对应的label是def
+
+![image-20230914195434861](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914195434861.png)
+
+![image-20230914195522328](https://markdown-zyy.obs.cn-east-3.myhuaweicloud.com/img/image-20230914195522328.png)
+
+对于有fall through的情况，直接没有对应的jmp即可。
 
 ## 程序运行
 
